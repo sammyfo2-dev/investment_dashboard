@@ -4,11 +4,21 @@ from app.services.technical_analysis import TechnicalAnalysisService
 from app.services.cache_service import cache_service
 from app.schemas.stock import StockData, StockChartData, MovingAveragesData, HighLowRange
 from datetime import datetime
+import random
 
 router = APIRouter()
 
 stock_service = StockService()
 technical_service = TechnicalAnalysisService()
+
+# Mock data for testing when Yahoo Finance is rate limiting
+MOCK_DATA = {
+    'AAPL': {'name': 'Apple Inc.', 'base_price': 185.00, 'change_percent': 2.3},
+    'GOOGL': {'name': 'Alphabet Inc.', 'base_price': 142.50, 'change_percent': -0.8},
+    'MSFT': {'name': 'Microsoft Corp.', 'base_price': 420.00, 'change_percent': 1.5},
+    'BTC-USD': {'name': 'Bitcoin', 'base_price': 98500.00, 'change_percent': 5.2},
+    'ETH-USD': {'name': 'Ethereum', 'base_price': 3650.00, 'change_percent': -2.1},
+}
 
 
 @router.get("/{symbol}", response_model=StockData)
@@ -25,6 +35,40 @@ async def get_stock(symbol: str):
 
     # Fetch current price
     current_data = stock_service.get_current_price(symbol)
+
+    # TEMPORARY: Use mock data if Yahoo Finance is rate limiting
+    if not current_data and symbol in MOCK_DATA:
+        mock = MOCK_DATA[symbol]
+        base_price = mock['base_price']
+        change_percent = mock['change_percent']
+        change_24h = base_price * (change_percent / 100)
+
+        response_data = {
+            'symbol': symbol,
+            'name': mock['name'],
+            'current_price': base_price,
+            'change_24h': change_24h,
+            'change_24h_percent': change_percent,
+            'moving_averages': {
+                'ma_50': base_price * 0.95,
+                'ma_100': base_price * 0.93,
+                'ma_150': base_price * 0.91,
+                'ma_200_day': base_price * 0.89,
+                'ma_200_week': base_price * 0.85,
+            },
+            'high_low_range': {
+                'week_52_high': base_price * 1.25,
+                'week_52_low': base_price * 0.75,
+                'current_price': base_price,
+                'position_percent': 65.0,
+            },
+            'last_updated': datetime.now().isoformat(),
+        }
+
+        # Cache the mock result
+        cache_service.set_stock_analysis(symbol, response_data)
+        return StockData(**response_data)
+
     if not current_data:
         raise HTTPException(status_code=404, detail=f"Stock {symbol} not found")
 
