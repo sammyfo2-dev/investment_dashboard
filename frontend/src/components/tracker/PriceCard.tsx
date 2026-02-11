@@ -91,9 +91,10 @@ export const PriceCard: React.FC<PriceCardProps> = ({ symbol, name }) => {
             </div>
             {data.change_24h_percent !== null && (
               <div
-                className={`flex items-center gap-1 text-sm font-medium ${
+                className={`flex items-center gap-1 text-sm font-medium cursor-help ${
                   isPositive ? 'text-green-600' : 'text-red-600'
                 }`}
+                title="Change from previous close"
               >
                 {isPositive ? (
                   <TrendingUp className="w-4 h-4" />
