@@ -1,9 +1,14 @@
 import React, { useState, useMemo } from 'react';
+import { useQueries } from '@tanstack/react-query';
 import { PriceCard } from './PriceCard';
 import { AddStockDialog } from './AddStockDialog';
+import { SearchFilterBar } from './SearchFilterBar';
 import { useWatchlist } from '@/hooks/useWatchlist';
+import { stockService } from '@/services/stockService';
 import { Button } from '@/components/ui/Button';
 import { Plus, ChevronRight, ChevronDown } from 'lucide-react';
+import { SortOption, PerformanceFilter, EnrichedWatchlistItem } from '@/types/filter';
+import { filterBySearch, filterBySector, filterByPerformance, sortWatchlist } from '@/lib/filterUtils';
 
 export const TrackerGrid: React.FC = () => {
   const { watchlist, isLoading, error } = useWatchlist();
@@ -12,12 +17,84 @@ export const TrackerGrid: React.FC = () => {
     new Set()
   );
 
-  // Group watchlist by sector
-  const groupedBySector = useMemo(() => {
-    const groups: { sector: string; items: typeof watchlist }[] = [];
-    const sectorMap = new Map<string, typeof watchlist>();
+  // Filter state
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedSectors, setSelectedSectors] = useState<string[]>([]);
+  const [performanceFilter, setPerformanceFilter] = useState<PerformanceFilter>('all');
+  const [sortBy, setSortBy] = useState<SortOption>('alpha-asc');
 
-    watchlist.forEach((item) => {
+  // Fetch stock data for all watchlist items in parallel
+  const stockQueries = useQueries({
+    queries: watchlist.map((item) => ({
+      queryKey: ['stock', item.symbol],
+      queryFn: () => stockService.getStock(item.symbol),
+      refetchInterval: 5 * 60 * 1000,
+      staleTime: 2 * 60 * 1000,
+    })),
+  });
+
+  // Enrich watchlist items with stock data
+  const enrichedWatchlist: EnrichedWatchlistItem[] = useMemo(() => {
+    return watchlist.map((item, index) => ({
+      ...item,
+      stockData: stockQueries[index]?.data,
+      isLoading: stockQueries[index]?.isLoading,
+      error: stockQueries[index]?.isError,
+    }));
+  }, [watchlist, stockQueries]);
+
+  // Apply filters and sorting
+  const filteredWatchlist = useMemo(() => {
+    let filtered = enrichedWatchlist;
+
+    // Apply search filter
+    filtered = filterBySearch(filtered, searchTerm);
+
+    // Apply sector filter
+    filtered = filterBySector(filtered, selectedSectors);
+
+    // Apply performance filter
+    filtered = filterByPerformance(filtered, performanceFilter);
+
+    // Apply sorting
+    filtered = sortWatchlist(filtered, sortBy);
+
+    return filtered;
+  }, [enrichedWatchlist, searchTerm, selectedSectors, performanceFilter, sortBy]);
+
+  // Get available sectors from watchlist
+  const availableSectors = useMemo(() => {
+    const sectors = new Set(watchlist.map((item) => item.sector || 'Unknown'));
+    return Array.from(sectors).sort((a, b) => {
+      if (a === 'Cryptocurrency') return -1;
+      if (b === 'Cryptocurrency') return 1;
+      return a.localeCompare(b);
+    });
+  }, [watchlist]);
+
+  // Clear all filters
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setSelectedSectors([]);
+    setPerformanceFilter('all');
+    setSortBy('alpha-asc');
+  };
+
+  // Toggle sector selection
+  const handleSectorToggle = (sector: string) => {
+    setSelectedSectors((prev) =>
+      prev.includes(sector)
+        ? prev.filter((s) => s !== sector)
+        : [...prev, sector]
+    );
+  };
+
+  // Group filtered watchlist by sector
+  const groupedBySector = useMemo(() => {
+    const groups: { sector: string; items: EnrichedWatchlistItem[] }[] = [];
+    const sectorMap = new Map<string, EnrichedWatchlistItem[]>();
+
+    filteredWatchlist.forEach((item) => {
       const sector = item.sector || 'Unknown';
       if (!sectorMap.has(sector)) {
         sectorMap.set(sector, []);
@@ -40,7 +117,7 @@ export const TrackerGrid: React.FC = () => {
     });
 
     return groups;
-  }, [watchlist]);
+  }, [filteredWatchlist]);
 
   const toggleSector = (sector: string) => {
     setCollapsedSectors((prev) => {
@@ -96,14 +173,15 @@ export const TrackerGrid: React.FC = () => {
   }
 
   const totalStocks = watchlist.length;
-  const totalSectors = groupedBySector.length;
+  const filteredCount = filteredWatchlist.length;
+  const totalSectors = availableSectors.length;
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-foreground">Your Watchlist</h2>
+          <h2 className="text-2xl font-bold text-foreground">My Portfolio Watchlist</h2>
           <p className="text-muted-foreground">
             {totalStocks} {totalStocks === 1 ? 'stock' : 'stocks'} across{' '}
             {totalSectors} {totalSectors === 1 ? 'sector' : 'sectors'}
@@ -115,9 +193,43 @@ export const TrackerGrid: React.FC = () => {
         </Button>
       </div>
 
+      {/* Search and Filter Bar */}
+      <SearchFilterBar
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        selectedSectors={selectedSectors}
+        availableSectors={availableSectors}
+        onSectorToggle={handleSectorToggle}
+        performanceFilter={performanceFilter}
+        onPerformanceChange={setPerformanceFilter}
+        sortBy={sortBy}
+        onSortChange={setSortBy}
+        onClearFilters={handleClearFilters}
+        resultsCount={filteredCount}
+        totalCount={totalStocks}
+      />
+
+      {/* Empty state for filtered results */}
+      {filteredWatchlist.length === 0 && (
+        <div className="flex items-center justify-center min-h-[300px]">
+          <div className="text-center border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-12 max-w-md">
+            <h3 className="text-xl font-semibold text-foreground mb-2">
+              No stocks match your filters
+            </h3>
+            <p className="text-muted-foreground mb-6">
+              Try adjusting your search term or filter criteria
+            </p>
+            <Button variant="outline" onClick={handleClearFilters}>
+              Clear All Filters
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Sector groups */}
-      <div className="space-y-4">
-        {groupedBySector.map((group) => {
+      {filteredWatchlist.length > 0 && (
+        <div className="space-y-4">
+          {groupedBySector.map((group) => {
           const isCollapsed = collapsedSectors.has(group.sector);
 
           return (
@@ -162,7 +274,8 @@ export const TrackerGrid: React.FC = () => {
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
 
       <AddStockDialog
         open={isAddDialogOpen}
