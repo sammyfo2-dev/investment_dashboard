@@ -12,3 +12,8 @@ export interface WatchlistCreate {
   asset_type: 'STOCK' | 'CRYPTO';
   name?: string;
 }
+
+export interface WatchlistUpdate {
+  name?: string;
+  sector?: string;
+}

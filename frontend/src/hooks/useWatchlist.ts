@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { watchlistService } from '@/services/watchlistService';
-import { WatchlistCreate } from '@/types/watchlist';
+import { WatchlistCreate, WatchlistUpdate } from '@/types/watchlist';
 
 export const useWatchlist = () => {
   const queryClient = useQueryClient();
@@ -12,6 +12,14 @@ export const useWatchlist = () => {
 
   const addMutation = useMutation({
     mutationFn: (item: WatchlistCreate) => watchlistService.addToWatchlist(item),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['watchlist'] });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ symbol, data }: { symbol: string; data: WatchlistUpdate }) =>
+      watchlistService.updateWatchlistItem(symbol, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['watchlist'] });
     },
@@ -29,8 +37,10 @@ export const useWatchlist = () => {
     isLoading: watchlistQuery.isLoading,
     error: watchlistQuery.error,
     addToWatchlist: addMutation.mutateAsync,
+    updateWatchlistItem: updateMutation.mutateAsync,
     removeFromWatchlist: removeMutation.mutateAsync,
     isAddingStock: addMutation.isPending,
+    isUpdatingStock: updateMutation.isPending,
     isRemovingStock: removeMutation.isPending,
   };
 };

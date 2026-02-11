@@ -14,6 +14,11 @@ class WatchlistCreate(WatchlistBase):
     pass
 
 
+class WatchlistUpdate(BaseModel):
+    name: Optional[str] = None
+    sector: Optional[str] = None
+
+
 class WatchlistResponse(WatchlistBase):
     id: int
     name: str

@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { MovingAverageIndicator } from './MovingAverageIndicator';
 import { HighLowRangeBar } from './HighLowRangeBar';
+import { EditStockDialog } from './EditStockDialog';
 import { useStockData } from '@/hooks/useStockData';
 import { useWatchlist } from '@/hooks/useWatchlist';
 import { formatCurrency, formatPercent } from '@/lib/utils';
-import { TrendingUp, TrendingDown, X } from 'lucide-react';
+import { TrendingUp, TrendingDown, X, Pencil } from 'lucide-react';
 
 interface PriceCardProps {
   symbol: string;
@@ -14,8 +15,12 @@ interface PriceCardProps {
 
 export const PriceCard: React.FC<PriceCardProps> = ({ symbol, name }) => {
   const { data, isLoading, error } = useStockData(symbol);
-  const { removeFromWatchlist } = useWatchlist();
+  const { removeFromWatchlist, watchlist } = useWatchlist();
   const [isRemoving, setIsRemoving] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+
+  // Get current watchlist item for editing
+  const watchlistItem = watchlist.find((item) => item.symbol === symbol);
 
   const handleRemove = async () => {
     if (
@@ -55,15 +60,24 @@ export const PriceCard: React.FC<PriceCardProps> = ({ symbol, name }) => {
 
   return (
     <Card className="h-full hover:shadow-lg transition-shadow relative">
-      {/* Remove button */}
-      <button
-        onClick={handleRemove}
-        disabled={isRemoving}
-        className="absolute top-2 right-2 p-1 rounded-full hover:bg-red-100 dark:hover:bg-red-900 text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50"
-        aria-label="Remove from watchlist"
-      >
-        <X className="w-4 h-4" />
-      </button>
+      {/* Action buttons */}
+      <div className="absolute top-2 right-2 flex gap-1">
+        <button
+          onClick={() => setIsEditDialogOpen(true)}
+          className="p-1 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900 text-gray-400 hover:text-blue-600 transition-colors"
+          aria-label="Edit stock"
+        >
+          <Pencil className="w-4 h-4" />
+        </button>
+        <button
+          onClick={handleRemove}
+          disabled={isRemoving}
+          className="p-1 rounded-full hover:bg-red-100 dark:hover:bg-red-900 text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50"
+          aria-label="Remove from watchlist"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
 
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start pr-6">
@@ -127,6 +141,17 @@ export const PriceCard: React.FC<PriceCardProps> = ({ symbol, name }) => {
           />
         </div>
       </CardContent>
+
+      {/* Edit Dialog */}
+      {watchlistItem && (
+        <EditStockDialog
+          open={isEditDialogOpen}
+          onClose={() => setIsEditDialogOpen(false)}
+          symbol={symbol}
+          currentName={watchlistItem.name}
+          currentSector={watchlistItem.sector}
+        />
+      )}
     </Card>
   );
 };
