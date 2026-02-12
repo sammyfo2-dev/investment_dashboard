@@ -1,5 +1,5 @@
 import React from 'react';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 
 interface MovingAverageIndicatorProps {
   label: string;
@@ -37,7 +37,7 @@ export const MovingAverageIndicator: React.FC<MovingAverageIndicatorProps> = ({
           {isAbove ? '▲' : '▼'} {Math.abs(distance).toFixed(2)}%
         </span>
         <span className="text-xs text-muted-foreground">
-          ${maValue.toFixed(2)}
+          {formatCurrency(maValue)}
         </span>
       </div>
     </div>
