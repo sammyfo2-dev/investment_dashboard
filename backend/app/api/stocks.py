@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from app.services.stock_service import StockService
 from app.services.crypto_service import CryptoService
+from app.services.alphavantage_service import AlphaVantageService
 from app.services.technical_analysis import TechnicalAnalysisService
 from app.services.cache_service import cache_service
 from app.schemas.stock import StockData, StockChartData, MovingAveragesData, HighLowRange
@@ -10,6 +11,7 @@ router = APIRouter()
 
 stock_service = StockService()
 crypto_service = CryptoService()
+alphavantage_service = AlphaVantageService()
 technical_service = TechnicalAnalysisService()
 
 
@@ -70,13 +72,28 @@ async def get_stock(symbol: str):
             'last_updated': datetime.now().isoformat(),
         }
     else:
-        # For stocks, fetch historical data and calculate technical indicators
-        df = stock_service.get_stock_data(symbol, period="2y")  # 2 years for 200-week MA
-        if df is None or df.empty:
-            raise HTTPException(status_code=404, detail=f"No historical data for {symbol}")
+        # For stocks, fetch historical data from Alpha Vantage and calculate metrics
+        historical_data = alphavantage_service.get_historical_data(symbol, outputsize='full')
 
-        # Calculate technical indicators
-        analysis = technical_service.get_full_analysis(df, current_price)
+        if historical_data and len(historical_data) >= 50:
+            # Calculate moving averages and 52-week range
+            moving_averages = alphavantage_service.calculate_moving_averages(historical_data, current_price)
+            high_low_range = alphavantage_service.calculate_52week_range(historical_data, current_price)
+        else:
+            # Fallback to null values if historical data unavailable
+            moving_averages = {
+                'ma_50': None,
+                'ma_100': None,
+                'ma_150': None,
+                'ma_200_day': None,
+                'ma_200_week': None,
+            }
+            high_low_range = {
+                'week_52_high': None,
+                'week_52_low': None,
+                'current_price': current_price,
+                'position_percent': None,
+            }
 
         # Build response
         response_data = {
@@ -85,8 +102,8 @@ async def get_stock(symbol: str):
             'current_price': current_price,
             'change_24h': current_data['change_24h'],
             'change_24h_percent': current_data['change_24h_percent'],
-            'moving_averages': analysis['moving_averages'],
-            'high_low_range': analysis['high_low_range'],
+            'moving_averages': moving_averages,
+            'high_low_range': high_low_range,
             'last_updated': datetime.now().isoformat(),
         }
 

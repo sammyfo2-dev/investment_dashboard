@@ -40,6 +40,7 @@ services:
       DATABASE_URL: postgresql://investing_user:dev_password@postgres:5432/investing_tool
       REDIS_URL: redis://redis:6379
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ALPHAVANTAGE_API_KEY: ${ALPHAVANTAGE_API_KEY:-demo}
     volumes:
       - ./backend:/app
       - ./backend/uploads:/app/uploads
