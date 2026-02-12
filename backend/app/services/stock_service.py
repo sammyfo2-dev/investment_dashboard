@@ -3,9 +3,14 @@ from datetime import datetime, timedelta
 import pandas as pd
 from typing import Optional
 import time
+from app.services.crypto_service import CryptoService
 
 
 class StockService:
+    @staticmethod
+    def is_crypto(symbol: str) -> bool:
+        """Check if symbol is a cryptocurrency"""
+        return symbol.upper().endswith('-USD') and symbol.upper() in CryptoService.SYMBOL_MAP
     @staticmethod
     def get_stock_data(symbol: str, period: str = "1y") -> Optional[pd.DataFrame]:
         """
@@ -29,7 +34,12 @@ class StockService:
 
     @staticmethod
     def get_current_price(symbol: str) -> Optional[dict]:
-        """Get current price and basic info"""
+        """Get current price and basic info (routes crypto to CoinGecko)"""
+        # Route crypto symbols to CoinGecko
+        if StockService.is_crypto(symbol):
+            return CryptoService.get_current_price(symbol)
+
+        # Use Yahoo Finance for stocks
         try:
             # Add delay to avoid rate limiting
             time.sleep(0.5)
@@ -93,18 +103,14 @@ class StockService:
 
     @staticmethod
     def get_stock_info(symbol: str, asset_type: str) -> Optional[dict]:
-        """Fetch name and sector from yfinance"""
+        """Fetch name and sector (routes crypto to CoinGecko)"""
+        # Route crypto symbols to CoinGecko
+        if asset_type.upper() == 'CRYPTO' or StockService.is_crypto(symbol):
+            return CryptoService.get_crypto_info(symbol)
+
+        # Use Yahoo Finance for stocks
         try:
             time.sleep(0.5)
-
-            if asset_type.upper() == 'CRYPTO':
-                ticker = yf.Ticker(symbol)
-                info = ticker.info
-                name = info.get('longName') or info.get('shortName') or symbol
-                return {
-                    'name': name,
-                    'sector': 'Cryptocurrency'
-                }
 
             ticker = yf.Ticker(symbol)
             info = ticker.info
@@ -126,7 +132,12 @@ class StockService:
 
     @staticmethod
     def validate_symbol(symbol: str) -> bool:
-        """Check if symbol exists in yfinance"""
+        """Check if symbol exists (routes crypto to CoinGecko)"""
+        # Route crypto symbols to CoinGecko
+        if StockService.is_crypto(symbol):
+            return CryptoService.validate_symbol(symbol)
+
+        # Use Yahoo Finance for stocks
         try:
             time.sleep(0.5)
             ticker = yf.Ticker(symbol)

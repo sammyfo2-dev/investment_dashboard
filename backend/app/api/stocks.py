@@ -4,21 +4,11 @@ from app.services.technical_analysis import TechnicalAnalysisService
 from app.services.cache_service import cache_service
 from app.schemas.stock import StockData, StockChartData, MovingAveragesData, HighLowRange
 from datetime import datetime
-import random
 
 router = APIRouter()
 
 stock_service = StockService()
 technical_service = TechnicalAnalysisService()
-
-# Mock data for testing when Yahoo Finance is rate limiting
-MOCK_DATA = {
-    'AAPL': {'name': 'Apple Inc.', 'base_price': 185.00, 'change_percent': 2.3},
-    'GOOGL': {'name': 'Alphabet Inc.', 'base_price': 142.50, 'change_percent': -0.8},
-    'MSFT': {'name': 'Microsoft Corp.', 'base_price': 420.00, 'change_percent': 1.5},
-    'BTC-USD': {'name': 'Bitcoin', 'base_price': 98500.00, 'change_percent': 5.2},
-    'ETH-USD': {'name': 'Ethereum', 'base_price': 3650.00, 'change_percent': -2.1},
-}
 
 
 @router.get("/{symbol}", response_model=StockData)
@@ -33,66 +23,60 @@ async def get_stock(symbol: str):
     if cached_data:
         return StockData(**cached_data)
 
-    # Fetch current price
+    # Fetch current price (routes crypto to CoinGecko)
     current_data = stock_service.get_current_price(symbol)
-
-    # TEMPORARY: Use mock data if Yahoo Finance is rate limiting
-    if not current_data and symbol in MOCK_DATA:
-        mock = MOCK_DATA[symbol]
-        base_price = mock['base_price']
-        change_percent = mock['change_percent']
-        change_24h = base_price * (change_percent / 100)
-
-        response_data = {
-            'symbol': symbol,
-            'name': mock['name'],
-            'current_price': base_price,
-            'change_24h': change_24h,
-            'change_24h_percent': change_percent,
-            'moving_averages': {
-                'ma_50': base_price * 0.95,
-                'ma_100': base_price * 0.93,
-                'ma_150': base_price * 0.91,
-                'ma_200_day': base_price * 0.89,
-                'ma_200_week': base_price * 0.85,
-            },
-            'high_low_range': {
-                'week_52_high': base_price * 1.25,
-                'week_52_low': base_price * 0.75,
-                'current_price': base_price,
-                'position_percent': 65.0,
-            },
-            'last_updated': datetime.now().isoformat(),
-        }
-
-        # Cache the mock result
-        cache_service.set_stock_analysis(symbol, response_data)
-        return StockData(**response_data)
-
     if not current_data:
         raise HTTPException(status_code=404, detail=f"Stock {symbol} not found")
 
-    # Fetch historical data for technical analysis
-    df = stock_service.get_stock_data(symbol, period="2y")  # 2 years for 200-week MA
-    if df is None or df.empty:
-        raise HTTPException(status_code=404, detail=f"No historical data for {symbol}")
-
     current_price = current_data['current_price']
 
-    # Calculate technical indicators
-    analysis = technical_service.get_full_analysis(df, current_price)
+    # Check if this is a crypto symbol
+    is_crypto = stock_service.is_crypto(symbol)
 
-    # Build response
-    response_data = {
-        'symbol': symbol,
-        'name': current_data['name'],
-        'current_price': current_price,
-        'change_24h': current_data['change_24h'],
-        'change_24h_percent': current_data['change_24h_percent'],
-        'moving_averages': analysis['moving_averages'],
-        'high_low_range': analysis['high_low_range'],
-        'last_updated': datetime.now().isoformat(),
-    }
+    if is_crypto:
+        # For crypto, use simple dummy data for moving averages and ranges
+        # since CoinGecko doesn't provide historical data in the same format
+        response_data = {
+            'symbol': symbol,
+            'name': current_data['name'],
+            'current_price': current_price,
+            'change_24h': current_data['change_24h'],
+            'change_24h_percent': current_data['change_24h_percent'],
+            'moving_averages': {
+                'ma_50': None,
+                'ma_100': None,
+                'ma_150': None,
+                'ma_200_day': None,
+                'ma_200_week': None,
+            },
+            'high_low_range': {
+                'week_52_high': None,
+                'week_52_low': None,
+                'current_price': current_price,
+                'position_percent': None,
+            },
+            'last_updated': datetime.now().isoformat(),
+        }
+    else:
+        # For stocks, fetch historical data and calculate technical indicators
+        df = stock_service.get_stock_data(symbol, period="2y")  # 2 years for 200-week MA
+        if df is None or df.empty:
+            raise HTTPException(status_code=404, detail=f"No historical data for {symbol}")
+
+        # Calculate technical indicators
+        analysis = technical_service.get_full_analysis(df, current_price)
+
+        # Build response
+        response_data = {
+            'symbol': symbol,
+            'name': current_data['name'],
+            'current_price': current_price,
+            'change_24h': current_data['change_24h'],
+            'change_24h_percent': current_data['change_24h_percent'],
+            'moving_averages': analysis['moving_averages'],
+            'high_low_range': analysis['high_low_range'],
+            'last_updated': datetime.now().isoformat(),
+        }
 
     # Cache the result
     cache_service.set_stock_analysis(symbol, response_data)
