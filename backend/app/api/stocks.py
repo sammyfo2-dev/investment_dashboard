@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from app.services.stock_service import StockService
+from app.services.crypto_service import CryptoService
 from app.services.technical_analysis import TechnicalAnalysisService
 from app.services.cache_service import cache_service
 from app.schemas.stock import StockData, StockChartData, MovingAveragesData, HighLowRange
@@ -8,6 +9,7 @@ from datetime import datetime
 router = APIRouter()
 
 stock_service = StockService()
+crypto_service = CryptoService()
 technical_service = TechnicalAnalysisService()
 
 
@@ -34,27 +36,37 @@ async def get_stock(symbol: str):
     is_crypto = stock_service.is_crypto(symbol)
 
     if is_crypto:
-        # For crypto, use simple dummy data for moving averages and ranges
-        # since CoinGecko doesn't provide historical data in the same format
+        # For crypto, fetch historical data from CoinGecko and calculate metrics
+        historical_data = crypto_service.get_historical_data(symbol, days=365)
+
+        if historical_data:
+            # Calculate moving averages and 52-week range
+            moving_averages = crypto_service.calculate_moving_averages(historical_data, current_price)
+            high_low_range = crypto_service.calculate_52week_range(historical_data, current_price)
+        else:
+            # Fallback to null values if historical data unavailable
+            moving_averages = {
+                'ma_50': None,
+                'ma_100': None,
+                'ma_150': None,
+                'ma_200_day': None,
+                'ma_200_week': None,
+            }
+            high_low_range = {
+                'week_52_high': None,
+                'week_52_low': None,
+                'current_price': current_price,
+                'position_percent': None,
+            }
+
         response_data = {
             'symbol': symbol,
             'name': current_data['name'],
             'current_price': current_price,
             'change_24h': current_data['change_24h'],
             'change_24h_percent': current_data['change_24h_percent'],
-            'moving_averages': {
-                'ma_50': None,
-                'ma_100': None,
-                'ma_150': None,
-                'ma_200_day': None,
-                'ma_200_week': None,
-            },
-            'high_low_range': {
-                'week_52_high': None,
-                'week_52_low': None,
-                'current_price': current_price,
-                'position_percent': None,
-            },
+            'moving_averages': moving_averages,
+            'high_low_range': high_low_range,
             'last_updated': datetime.now().isoformat(),
         }
     else:
