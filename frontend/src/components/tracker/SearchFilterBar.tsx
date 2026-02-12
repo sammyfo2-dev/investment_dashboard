@@ -57,7 +57,7 @@ export const SearchFilterBar: React.FC<SearchFilterBarProps> = ({
     (sortBy !== 'alpha-asc' ? 1 : 0);
 
   return (
-    <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 mb-6 space-y-4">
+    <div className="space-y-4">
       {/* Search and Results Count */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div className="relative flex-1 max-w-md">
